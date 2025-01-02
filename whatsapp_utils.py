@@ -12,7 +12,6 @@ from db_utils import salvar_pagamento
 from config import usuarios, plano, valor, pix
 from telegram_utils import gerar_tabela_pagamentos, enviar_notificacao_telegram
 import re
-import logging
 
 # Caminho para o diretório do perfil do Chrome
 perfil_chrome = 'C:\\Users\\matheus.ribeiro\\AppData\\Local\\Google\\Chrome\\User Data\\Default'
@@ -78,33 +77,25 @@ def extrair_id_usuario(mensagem):
     except (ValueError, IndexError):
         return None
 
-import logging
-
 def verificar_comprovante(mensagem):
     """
     Verifica se a mensagem contém um comprovante de pagamento (imagem ou PDF).
     """
-    logging.info("Verificando a mensagem para comprovantes.")
-
     try:
         # Verifica se há uma imagem na mensagem
-        if mensagem.find_element(By.CSS_SELECTOR, "img[src*='blob']"):
-            logging.info("Imagem encontrada na mensagem.")
-            return True
+        mensagem.find_element(By.CSS_SELECTOR, "img[src*='blob']")
+        return True
     except NoSuchElementException:
-        logging.info("Nenhuma imagem encontrada na mensagem.")
+        pass
 
     try:
         # Verifica se há um link para um arquivo PDF na mensagem
-        if mensagem.find_element(By.CSS_SELECTOR, "a.x13faqbe._ao3e"):
-            logging.info("PDF encontrado na mensagem.")
-            return True
+        mensagem.find_element(By.CSS_SELECTOR, "a[href$='.pdf']")
+        return True
     except NoSuchElementException:
-        logging.info("Nenhum PDF encontrado na mensagem.")
+        pass
 
-    logging.info("Nenhum comprovante encontrado na mensagem.")
     return False
-
 
 def verificar_mensagens_e_comprovantes():
     """
@@ -120,21 +111,19 @@ def verificar_mensagens_e_comprovantes():
     )
     contato.click()
 
-    # Verificar mensagens por 1 minuto
-    end_time = time.time() + 60  # 1 minuto (60 segundos)
+    # Verificar mensagens por 5 minutos
+    end_time = time.time() + 300  # 5 minutos (300 segundos)
     while time.time() < end_time:
         mensagens = driver.find_elements(By.CSS_SELECTOR, "div[class*='message-in']")[-5:]
 
         for mensagem in mensagens:
             id_usuario = extrair_id_usuario(mensagem.text)
-            print(f"Verificando mensagem do usuário ID: {id_usuario}")
 
             if id_usuario is not None:
                 if verificar_comprovante(mensagem):
                     data_hora_atual = datetime.now()
                     data_pagamento = data_hora_atual.strftime("%Y-%m-%d")
                     salvar_pagamento(id_usuario, valor, 1, 2024, data_pagamento, "pago")
-                    print(f"Pagamento confirmado para o usuário ID: {id_usuario}")
 
                     # Gerar a tabela de pagamentos
                     tabela = gerar_tabela_pagamentos()
@@ -144,7 +133,6 @@ def verificar_mensagens_e_comprovantes():
                 else:
                     data_atual = datetime.now().strftime("%Y-%m-%d")
                     salvar_pagamento(id_usuario, valor, 1, 2024, data_atual, "pendente")
-                    print(f"Pagamento pendente para o usuário ID: {id_usuario}")
 
         time.sleep(10)  # Espera 10 segundos antes de verificar novamente
 
