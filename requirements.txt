@@ -1,0 +1,14 @@
+selenium
+pywhatkit
+opencv-python
+pyautogui
+python-telegram-bot
+telebot
+
+
+# Enviar mensagens iniciais para todos os usuários
+logging.info("Enviando mensagens iniciais para todos os usuários.")
+for usuario in usuarios:
+    if not usuario_pagou(usuario['id_usuario']):
+        logging.info(f"Enviando mensagem para o usuário {usuario['nome']} (ID: {usuario['id_usuario']}).")
+        enviar_mensagem_inicial(usuario)
