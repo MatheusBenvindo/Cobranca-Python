@@ -2,13 +2,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import (
-    NoSuchElementException,
-    TimeoutException,
-)
-from selenium.webdriver.chrome.options import (
-    Options,
-)  # Importação correta da classe Options
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.chrome.options import Options
 import time
 import random
 from datetime import datetime
@@ -46,11 +41,10 @@ def criar_driver():
     return driver
 
 
-def enviar_mensagem_inicial(usuario):
+def enviar_mensagem_inicial(driver, usuario):
     """
     Envia a mensagem inicial de cobrança para o usuário no grupo "Eu".
     """
-    driver = criar_driver()
     driver.get("https://web.whatsapp.com/")
     print("Aguardando 40 segundos para o carregamento do WhatsApp Web...")
     time.sleep(40)
@@ -63,14 +57,14 @@ def enviar_mensagem_inicial(usuario):
         contato.click()
     except TimeoutException:
         print("Erro: Tempo limite excedido ao procurar o elemento 'Eu'.")
-        driver.quit()
         return
 
     # Escrever e enviar a mensagem
-    mensagem = f"""Oi, {usuario['nome']}! 
-Referente ao {plano} no valor de R${usuario['valor']}, 
-favor realizar o pagamento via PIX: {pix}.
-Após o pagamento, envie o comprovante por aqui."""  # Remove emojis complexos, se houver
+    mensagem = f"""Oi, {usuario['nome']} (ID: {usuario['id_usuario']}) 
+    !, tudo bem?
+    Referente ao {plano} no valor de R${usuario['valor']}, 
+    favor realizar o pagamento via PIX: {pix}.
+    Após o pagamento, envie o comprovante por aqui."""
 
     caixa_texto_xpath = (
         '//*[@id="main"]/footer/div[1]/div/span/div/div[2]/div[1]/div[2]/div[1]/p'
@@ -82,7 +76,6 @@ Após o pagamento, envie o comprovante por aqui."""  # Remove emojis complexos, 
         print("Caixa de texto encontrada.")
     except TimeoutException:
         print("Erro: Tempo limite excedido ao procurar a caixa de texto.")
-        driver.quit()
         return
 
     # Enviar a mensagem inteira de uma vez
@@ -104,7 +97,6 @@ Após o pagamento, envie o comprovante por aqui."""  # Remove emojis complexos, 
         botao_enviar.click()
     except TimeoutException:
         print("Erro: Tempo limite excedido ao procurar o botão de enviar.")
-        driver.quit()
         return
 
     time.sleep(random.randint(5, 15))
@@ -116,17 +108,15 @@ Após o pagamento, envie o comprovante por aqui."""  # Remove emojis complexos, 
     print(
         f"Mensagem enviada para o usuário {usuario['nome']} (ID: {usuario['id_usuario']})."
     )
-    driver.quit()
 
 
 def extrair_id_usuario(mensagem):
     """
-    Extrai o ID do usuário da mensagem com base no número de telefone.
+    Extrai o ID do usuário da mensagem com base no nome e número de telefone.
     """
     try:
-        # Procurar pelo número de telefone na mensagem
         for usuario in usuarios:
-            if usuario["numero"] in mensagem:
+            if f"ID: {usuario['id_usuario']}" in mensagem:
                 return usuario["id_usuario"]
         return None
     except Exception as e:
@@ -188,6 +178,8 @@ def verificar_mensagens_e_comprovantes(driver):
         5  # Máximo de tentativas sem mensagens antes de sair do loop
     )
 
+    usuario_atual_id = None  # Variável para armazenar o ID do usuário atual
+
     while tentativas_sem_mensagens < max_tentativas_sem_mensagens:
         try:
             logging.info("Procurando mensagens...")
@@ -208,21 +200,25 @@ def verificar_mensagens_e_comprovantes(driver):
             )
 
             for mensagem in mensagens:
-                id_usuario = extrair_id_usuario(mensagem.text)
-                logging.info(f"Processando mensagem do usuário ID: {id_usuario}")
+                if (
+                    not usuario_atual_id
+                ):  # Procurar o ID do usuário apenas se não estiver definido
+                    usuario_atual_id = extrair_id_usuario(mensagem.text)
+                    if usuario_atual_id:
+                        logging.info(f"Usuário atual ID encontrado: {usuario_atual_id}")
 
-                if id_usuario is not None:
+                if usuario_atual_id:
                     logging.info(
-                        f"Verificando comprovante para o usuário ID: {id_usuario}"
+                        f"Verificando comprovante para o usuário ID: {usuario_atual_id}"
                     )
                     if verificar_documento(mensagem):
                         data_hora_atual = datetime.now()
                         data_pagamento = data_hora_atual.strftime("%Y-%m-%d")
                         salvar_pagamento(
-                            id_usuario, valor, 1, 2024, data_pagamento, "pago"
+                            usuario_atual_id, valor, 1, 2024, data_pagamento, "pago"
                         )
                         logging.info(
-                            f"Pagamento confirmado para usuário ID: {id_usuario}"
+                            f"Pagamento confirmado para usuário ID: {usuario_atual_id}"
                         )
 
                         # Gerar a tabela de pagamentos
@@ -232,13 +228,14 @@ def verificar_mensagens_e_comprovantes(driver):
                         enviar_notificacao_telegram(
                             f"Pagamento atualizado:\n`\n{tabela}\n`"
                         )
+                        usuario_atual_id = None  # Resetar o ID do usuário após o pagamento ser confirmado
                     else:
                         data_atual = datetime.now().strftime("%Y-%m-%d")
                         salvar_pagamento(
-                            id_usuario, valor, 1, 2024, data_atual, "pendente"
+                            usuario_atual_id, valor, 1, 2024, data_atual, "pendente"
                         )
                         logging.info(
-                            f"Pagamento pendente para usuário ID: {id_usuario}"
+                            f"Pagamento pendente para usuário ID: {usuario_atual_id}"
                         )
                 else:
                     logging.info(
@@ -261,16 +258,19 @@ def verificar_mensagens_e_comprovantes(driver):
 
 
 def main():
-    # Criar o driver para a verificação de mensagens
+    # Criar a tabela de pagamentos no banco de dados
     criar_tabela()
+
+    # Criar o driver para a verificação de mensagens
     driver = criar_driver()
-    enviar_mensagem_inicial
+
     # Verificar mensagens e comprovantes para todos os usuários
     verificar_mensagens_e_comprovantes(driver)
+
     # Manter o driver aberto para inspeção
     print("Verificação concluída. Mantenha o navegador aberto para inspeção.")
     while True:
-        time
+        time.sleep(10)
 
 
 if __name__ == "__main__":
