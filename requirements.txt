@@ -12,3 +12,186 @@ for usuario in usuarios:
     if not usuario_pagou(usuario['id_usuario']):
         logging.info(f"Enviando mensagem para o usuário {usuario['nome']} (ID: {usuario['id_usuario']}).")
         enviar_mensagem_inicial(usuario)
+
+
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+)
+from selenium.webdriver.chrome.options import Options  # Importação correta da classe Options
+import time
+import random
+from datetime import datetime
+from db_utils import salvar_pagamento
+from config import usuarios, plano, valor, pix
+from telegram_utils import gerar_tabela_pagamentos, enviar_notificacao_telegram
+import re
+
+# Caminho para o diretório do perfil do Chrome
+perfil_chrome = (
+    "C:\\Users\\matheus.ribeiro\\AppData\\Local\\Google\\Chrome\\User Data\\Default"
+)
+
+def criar_driver():
+    """
+    Cria uma instância do driver do Chrome com as opções de perfil.
+    """
+    chrome_options = Options()
+    chrome_options.add_argument(f"user-data-dir={perfil_chrome}")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    chrome_options.add_argument("--disable-gpu")
+    # Removemos a linha de execução em modo headless para exibir o navegador
+    # chrome_options.add_argument("--headless") 
+
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
+
+def enviar_mensagem_inicial(usuario):
+    """
+    Envia a mensagem inicial de cobrança para o usuário diretamente no chat.
+    """
+    driver = criar_driver()
+    numero_wa = f"https://wa.me/{usuario['numero']}"
+    driver.get(numero_wa)
+    print(f"Aguardando 40 segundos para o carregamento do WhatsApp Web para {usuario['nome']}...")
+    time.sleep(40)
+
+    try:
+        caixa_texto_xpath = (
+            '//*[@id="main"]/footer/div[1]/div/span/div/div[2]/div[1]/div[2]/div[1]/p'
+        )
+        caixa_texto = WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.XPATH, caixa_texto_xpath))
+        )
+        print("Caixa de texto encontrada.")
+
+        # Escrever e enviar a mensagem
+        mensagem = f"""Oi, {usuario['nome']}! 
+Referente ao {plano} no valor de R${usuario['valor']}, 
+favor realizar o pagamento via PIX: {pix}.
+Após o pagamento, envie o comprovante por aqui."""  # Remove emojis complexos, se houver
+
+        # Enviar a mensagem inteira de uma vez
+        caixa_texto.send_keys(mensagem)
+        time.sleep(
+            random.uniform(0.5, 1.0)
+        )  # Intervalo aleatório entre 500ms e 1s para simular digitação
+
+        botao_enviar = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    '//*[@id="main"]/footer/div[1]/div/span/div/div[2]/div[2]/button/span',
+                )
+            )
+        )
+        print("Botão de enviar encontrado.")
+        botao_enviar.click()
+
+        time.sleep(random.randint(5, 15))
+
+        data_atual = datetime.now().strftime("%Y-%m-%d")
+        salvar_pagamento(
+            usuario["id_usuario"], usuario["valor"], 1, 2024, data_atual, "pendente"
+        )
+        print(
+            f"Mensagem enviada para o usuário {usuario['nome']} (ID: {usuario['id_usuario']})."
+        )
+    except TimeoutException:
+        print("Erro: Tempo limite excedido ao procurar a caixa de texto ou botão de enviar.")
+    finally:
+        driver.quit()
+
+def extrair_id_usuario(mensagem):
+    """
+    Extrai o ID do usuário da mensagem.
+    """
+    try:
+        id_usuario = int(mensagem.split(":")[0].replace("US", ""))
+        return id_usuario
+    except (ValueError, IndexError):
+        return None
+
+def verificar_comprovante(mensagem):
+    """
+    Verifica se a mensagem contém um comprovante de pagamento (imagem ou PDF).
+    """
+    try:
+        # Verifica se há uma imagem na mensagem
+        mensagem.find_element(By.CSS_SELECTOR, "img[src*='blob']")
+        return True
+    except NoSuchElementException:
+        pass
+
+    try:
+        # Verifica se há um link para um arquivo PDF na mensagem
+        mensagem.find_element(By.CSS_SELECTOR, "a.x13faqbe._ao3e")
+        return True
+    except NoSuchElementException:
+        pass
+
+    return False
+
+def verificar_mensagens_e_comprovantes():
+    """
+    Verifica as últimas mensagens no grupo "Eu" e atualiza o status dos pagamentos.
+    """
+    driver = criar_driver()
+    driver.get("https://web.whatsapp.com/")
+
+    time.sleep(40)
+
+    contato = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, f"//span[@title='Eu']"))
+    )
+    contato.click()
+
+    # Verificar mensagens por 5 minutos
+    end_time = time.time() + 300  # 5 minutos (300 segundos)
+    while time.time() < end_time:
+        mensagens = driver.find_elements(By.CSS_SELECTOR, "div[class*='message-in']")[
+            -5:
+        ]
+
+        for mensagem in mensagens:
+            id_usuario = extrair_id_usuario(mensagem.text)
+
+            if id_usuario is not None:
+                if verificar_comprovante(mensagem):
+                    data_hora_atual = datetime.now()
+                    data_pagamento = data_hora_atual.strftime("%Y-%m-%d")
+                    salvar_pagamento(id_usuario, valor, 1, 2024, data_pagamento, "pago")
+
+                    # Gerar a tabela de pagamentos
+                    tabela = gerar_tabela_pagamentos()
+
+                    # Enviar a tabela para o Telegram
+                    enviar_notificacao_telegram(
+                        f"Pagamento atualizado:\n`\n{tabela}\n`"
+                    )
+                else:
+                    data_atual = datetime.now().strftime("%Y-%m-%d")
+                    salvar_pagamento(id_usuario, valor, 1, 2024, data_atual, "pendente")
+
+        time.sleep(10)  # Espera 10 segundos antes de verificar novamente
+
+    time.sleep(random.randint(5, 15))
+
+def main():
+    for usuario in usuarios:
+        print(f"Processando usuário: {usuario['nome']} (ID: {usuario['id_usuario']})")
+        try:
+            enviar_mensagem_inicial(usuario)
+            print(f"Mensagem de cobrança enviada para {usuario['nome']}.")
+        except Exception as e:
+            print(f"Erro ao enviar mensagem para {usuario['nome']}: {e}")
+
+if __name__ == "__main__":
+    main()

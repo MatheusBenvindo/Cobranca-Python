@@ -2,10 +2,25 @@ import logging
 from config import usuarios
 from db_utils import criar_tabela, usuario_pagou, verificar_todos_pagamentos
 from whatsapp_utils import enviar_mensagem_inicial, verificar_mensagens_e_comprovantes
-from telegram_utils import enviar_notificacao_final, gerar_tabela_pagamentos, enviar_notificacao_telegram
+from telegram_utils import (
+    enviar_notificacao_final,
+    gerar_tabela_pagamentos,
+    enviar_notificacao_telegram,
+)
+
+
+logging.info("Enviando mensagens iniciais para todos os usuários.")
+for usuario in usuarios:
+    if not usuario_pagou(usuario["id_usuario"]):
+        logging.info(
+            f"Enviando mensagem para o usuário {usuario['nome']} (ID: {usuario['id_usuario']})."
+        )
+        enviar_mensagem_inicial(usuario)
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 logging.info("Criando tabela no banco de dados.")
 criar_tabela()
