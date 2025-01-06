@@ -25,10 +25,11 @@ perfil_chrome = (
     "C:\\Users\\matheus.ribeiro\\AppData\\Local\\Google\\Chrome\\User Data\\Profile 1"
 )
 
+
 def criar_driver():
-    '''
+    """
     Cria uma instância do driver do Chrome com as opções de perfil.
-    '''
+    """
     chrome_options = Options()
     chrome_options.add_argument(f"user-data-dir={perfil_chrome}")
     chrome_options.add_argument("--no-sandbox")
@@ -39,11 +40,12 @@ def criar_driver():
     driver = webdriver.Chrome(options=chrome_options)
     return driver
 
+
 def abrir_conversa_whatsapp_web(driver, numero):
-    '''
+    """
     Abre uma conversa no WhatsApp Web a partir do número de telefone,
     mantendo a interação no navegador.
-    '''
+    """
     link = f"https://web.whatsapp.com/send?phone={numero}"
     driver.get(link)
 
@@ -57,10 +59,11 @@ def abrir_conversa_whatsapp_web(driver, numero):
 
     print("Conversa aberta no WhatsApp Web com sucesso.")
 
+
 def enviar_mensagem_inicial(driver, usuario):
-    '''
+    """
     Envia a mensagem inicial de cobrança para o usuário no WhatsApp Web.
-    '''
+    """
     abrir_conversa_whatsapp_web(driver, f"55{usuario['numero']}")
 
     mensagem = f"""Oi, {usuario['nome']} (ID: {usuario['id_usuario']}) 
@@ -86,9 +89,7 @@ def enviar_mensagem_inicial(driver, usuario):
 
     for linha in linhas_mensagem:
         caixa_texto.send_keys(linha.strip())
-        time.sleep(
-            random.uniform(1.0, 2.0)
-        )
+        time.sleep(random.uniform(1.0, 2.0))
 
     try:
         botao_enviar = WebDriverWait(driver, 20).until(
@@ -120,10 +121,11 @@ def enviar_mensagem_inicial(driver, usuario):
         f"Mensagem enviada para o usuário {usuario['nome']} (ID: {usuario['id_usuario']})."
     )
 
+
 def extrair_id_usuario(mensagem):
-    '''
+    """
     Extrai o ID do usuário da mensagem com base no nome e número de telefone.
-    '''
+    """
     try:
         for usuario in usuarios:
             if f"ID: {usuario['id_usuario']}" in mensagem:
@@ -133,33 +135,39 @@ def extrair_id_usuario(mensagem):
         logging.error(f"Erro ao extrair ID do usuário: {e}")
         return None
 
+
 def verificar_documento(mensagem):
-    '''Verifica se a mensagem contém um documento.'''
-    tem_icone_download = bool(
-        mensagem.find_elements(By.CSS_SELECTOR, "svg[title='audio-download']")
-    )
-    tem_icone_pdf = bool(mensagem.find_elements(By.CSS_SELECTOR, "div.icon-doc-pdf"))
-    tem_link_pdf = False
+    """Verifica se a mensagem contém um documento PDF recebido."""
+    try:
+        # Verificar se a mensagem é recebida
+        if "message-in" in mensagem.get_attribute("class"):
+            tem_icone_download = bool(
+                mensagem.find_elements(By.CSS_SELECTOR, "svg[title='audio-download']")
+            )
+            tem_icone_pdf = bool(
+                mensagem.find_elements(By.CSS_SELECTOR, "div.icon-doc-pdf")
+            )
+            tem_link_pdf = False
 
-    links = mensagem.find_elements(By.CSS_SELECTOR, "span._ao3e")
-    for link in links:
-        if link.text.endswith(".pdf"):
-            tem_link_pdf = True
-            break
+            links = mensagem.find_elements(By.CSS_SELECTOR, "span._ao3e")
+            for link in links:
+                if link.text.endswith(".pdf"):
+                    tem_link_pdf = True
+                    break
 
-    tem_xpath_pdf = bool(
-        mensagem.find_elements(
-            By.XPATH,
-            '//*[@id="main"]/div[3]/div/div[2]/div[3]/div[41]/div/div/div[1]/div[1]/div[1]/div[1]/div[2]/div/div[1]/div',
-        )
-    )
+            # Verificar se há ícones ou links indicando um documento PDF
+            if tem_icone_download or tem_icone_pdf or tem_link_pdf:
+                return True
+        return False
+    except Exception as e:
+        logging.error(f"Erro ao verificar documento: {e}")
+        return False
 
-    return tem_icone_download or tem_icone_pdf or tem_link_pdf or tem_xpath_pdf
 
 def enviar_mensagem_agradecimento(driver, usuario):
-    '''
+    """
     Envia uma mensagem de agradecimento ao usuário no WhatsApp Web.
-    '''
+    """
     abrir_conversa_whatsapp_web(driver, f"55{usuario['numero']}")
 
     mensagem = "Matt Bot agradece e deseja um ótimo dia a você."
@@ -173,9 +181,7 @@ def enviar_mensagem_agradecimento(driver, usuario):
             EC.visibility_of_element_located((By.XPATH, caixa_texto_xpath))
         )
         caixa_texto.send_keys(mensagem)
-        time.sleep(
-            random.uniform(1.0, 2.0)
-        )
+        time.sleep(random.uniform(1.0, 2.0))
     except TimeoutException:
         print("Erro: Tempo limite excedido ao procurar a caixa de texto.")
         return
@@ -199,10 +205,11 @@ def enviar_mensagem_agradecimento(driver, usuario):
         f"Mensagem de agradecimento enviada para o usuário {usuario['nome']} (ID: {usuario['id_usuario']})."
     )
 
+
 def verificar_mensagens_e_comprovantes(driver):
-    '''
+    """
     Verifica as últimas mensagens e atualiza o status dos pagamentos.
-    '''
+    """
     driver.get("https://web.whatsapp.com/")
     print("Aguardando 40 segundos para o carregamento do WhatsApp Web...")
     time.sleep(40)
@@ -241,7 +248,7 @@ def verificar_mensagens_e_comprovantes(driver):
                     continue
 
                 for mensagem in mensagens:
-                    if verificar_documento(mensagem):
+                    if verificar_documento(mensagem):  # Usar a função modificada
                         data_hora_atual = datetime.now()
                         data_pagamento = data_hora_atual.strftime("%Y-%m-%d")
                         salvar_pagamento(
