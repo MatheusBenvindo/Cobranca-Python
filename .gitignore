@@ -1,0 +1,4 @@
+# .gitignore
+.env
+config.py
+pagamentos.db
