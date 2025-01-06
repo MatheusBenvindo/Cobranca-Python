@@ -10,9 +10,6 @@ logging.basicConfig(
 
 
 def criar_tabela():
-    """
-    Cria a tabela `pagamentos` no banco de dados se ela não existir.
-    """
     conn = sqlite3.connect("pagamentos.db")
     cursor = conn.cursor()
 
