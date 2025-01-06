@@ -27,7 +27,7 @@ Projeto automatizado para cobrança de planos famílias divididos com diversas p
 ## Instalação
 1. Clone este repositório:
     ```bash
-    git clone https://github.com/MatheusBenvindo/.git
+    git clone https://github.com/MatheusBenvindo/Cobranca-Python
     cd seurepositorio
     ```
 2. Instale as dependências:
