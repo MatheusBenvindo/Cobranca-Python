@@ -32,6 +32,7 @@ def criar_driver():
     """
     chrome_options = Options()
     chrome_options.add_argument(f"user-data-dir={perfil_chrome}")
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--remote-debugging-port=9222")
@@ -70,7 +71,8 @@ def enviar_mensagem_inicial(driver, usuario):
     !, tudo bem?
     Referente ao {plano} no valor de R${usuario['valor']}, 
     favor realizar o pagamento via PIX: {pix}.
-    Após o pagamento, envie o comprovante por aqui."""
+    Após o pagamento, envie o comprovante em *PDF* para atualizar seu pagamento por aqui, favor efetuar pagamento
+    dentro do horário comercial em dias úteis."""
 
     linhas_mensagem = mensagem.split("\n")
 
