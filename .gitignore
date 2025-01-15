@@ -2,4 +2,5 @@
 .env
 config.py
 pagamentos.db
+db_update.py
 Matt/
